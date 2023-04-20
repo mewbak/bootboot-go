@@ -28,7 +28,7 @@
  *
  */
 
-package kernel
+package main
 
 import "unsafe"
 
@@ -46,11 +46,11 @@ import "unsafe"
  */
 
 const (
-    BOOTBOOT_MMIO = 0xfffffffff8000000  /* memory mapped IO virtual address */
-    BOOTBOOT_FB   = 0xfffffffffc000000  /* frame buffer virtual address */
-    BOOTBOOT_INFO = 0xffffffffffe00000  /* bootboot struct virtual address */
-    BOOTBOOT_ENV  = 0xffffffffffe01000  /* environment string virtual address */
-    BOOTBOOT_CORE = 0xffffffffffe02000  /* core loadable segment start */
+	BOOTBOOT_MMIO = 0xfffffffff8000000 /* memory mapped IO virtual address */
+	BOOTBOOT_FB   = 0xfffffffffc000000 /* frame buffer virtual address */
+	BOOTBOOT_INFO = 0xffffffffffe00000 /* bootboot struct virtual address */
+	BOOTBOOT_ENV  = 0xffffffffffe01000 /* environment string virtual address */
+	BOOTBOOT_CORE = 0xffffffffffe02000 /* core loadable segment start */
 )
 
 /* our "font", Go simply can't import variables from another object (and it can't embed byte arrays either, only strings...) */
@@ -59,71 +59,77 @@ const glyphs = "\x00\x00\xda\x02\x80\x82\x02\x80\x82\x02\x80\xb6\x00\x00\x00\x00
 /******************************************
  * Entry point, called by BOOTBOOT Loader *
  ******************************************/
-func init() {
-    /*** NOTE: this code runs on all cores in parallel ***/
-    var x, y int
-    var w int = (int)(*(*uint32)(unsafe.Pointer(uintptr(BOOTBOOT_INFO + 0x34))))    // bootboot.fb_width
-    var h int = (int)(*(*uint32)(unsafe.Pointer(uintptr(BOOTBOOT_INFO + 0x38))))    // bootboot.fb_height
-    var s int = (int)(*(*uint32)(unsafe.Pointer(uintptr(BOOTBOOT_INFO + 0x3c))))    // bootboot.fb_scanline
+//go:cgo_export_static _start _start
+//go:linkname _start _start
+//go:nosplit
+func _start() {
+	/*** NOTE: this code runs on all cores in parallel ***/
+	var x, y int
+	var w int = (int)(*(*uint32)(unsafe.Pointer(uintptr(BOOTBOOT_INFO + 0x34)))) // bootboot.fb_width
+	var h int = (int)(*(*uint32)(unsafe.Pointer(uintptr(BOOTBOOT_INFO + 0x38)))) // bootboot.fb_height
+	var s int = (int)(*(*uint32)(unsafe.Pointer(uintptr(BOOTBOOT_INFO + 0x3c)))) // bootboot.fb_scanline
 
-    if (s > 0) {
-        // cross-hair to see screen dimension detected correctly
-        for y = 0; y < h; y++ {
-            *(*uint32)(unsafe.Pointer(uintptr(BOOTBOOT_FB) + uintptr(s*y + w*2))) = 0x00FFFFFF;
-        }
-        for x = 0; x < w; x++ {
-            *(*uint32)(unsafe.Pointer(uintptr(BOOTBOOT_FB) + uintptr(s*y/2 + x*4))) = 0x00FFFFFF;
-        }
+	if s > 0 {
+		// cross-hair to see screen dimension detected correctly
+		for y = 0; y < h; y++ {
+			*(*uint32)(unsafe.Pointer(uintptr(BOOTBOOT_FB) + uintptr(s*y+w*2))) = 0x00FFFFFF
+		}
+		for x = 0; x < w; x++ {
+			*(*uint32)(unsafe.Pointer(uintptr(BOOTBOOT_FB) + uintptr(s*y/2+x*4))) = 0x00FFFFFF
+		}
 
-        // red, green, blue boxes in order
-        for y = 0; y < 20; y++ {
-            for x = 0; x < 20; x++ {
-                *(*uint32)(unsafe.Pointer(uintptr(BOOTBOOT_FB) + uintptr(s*(y+20) + (x+20)*4))) = 0x00FF0000;
-            }
-        }
-        for y = 0; y < 20; y++ {
-            for x = 0; x < 20; x++ {
-                *(*uint32)(unsafe.Pointer(uintptr(BOOTBOOT_FB) + uintptr(s*(y+20) + (x+50)*4))) = 0x0000FF00;
-            }
-        }
-        for y = 0; y < 20; y++ {
-            for x = 0; x < 20; x++ {
-                *(*uint32)(unsafe.Pointer(uintptr(BOOTBOOT_FB) + uintptr(s*(y+20) + (x+80)*4))) = 0x000000FF;
-            }
-        }
+		// red, green, blue boxes in order
+		for y = 0; y < 20; y++ {
+			for x = 0; x < 20; x++ {
+				*(*uint32)(unsafe.Pointer(uintptr(BOOTBOOT_FB) + uintptr(s*(y+20)+(x+20)*4))) = 0x00FF0000
+			}
+		}
+		for y = 0; y < 20; y++ {
+			for x = 0; x < 20; x++ {
+				*(*uint32)(unsafe.Pointer(uintptr(BOOTBOOT_FB) + uintptr(s*(y+20)+(x+50)*4))) = 0x0000FF00
+			}
+		}
+		for y = 0; y < 20; y++ {
+			for x = 0; x < 20; x++ {
+				*(*uint32)(unsafe.Pointer(uintptr(BOOTBOOT_FB) + uintptr(s*(y+20)+(x+80)*4))) = 0x000000FF
+			}
+		}
 
-        // say hello
-        puts("Hello from a simple BOOTBOOT kernel");
-    }
+		// say hello
+		puts("Hello from a simple BOOTBOOT kernel")
+	}
 
-    // hang for now
-    for ; ; {
-    }
+	// hang for now
+	for {
+	}
 }
 
 /**************************
  * Display text on screen *
  **************************/
 func puts(s string) {
-    var i,x,y,kx,line,mask,offs int
-    kx = 0
-    for i = 0; i < len(s); i++ {
-        offs = kx * 9 * 4;
-        for y = 0; y < 16; y++ {
-            line = offs
-            mask = 1 << 7
-            for x = 0; x < 8; x++ {
-                if ((int(glyphs[int(s[i]) * 16 + y]) & mask) == mask) {
-                    *(*uint32)(unsafe.Pointer(uintptr(BOOTBOOT_FB) + uintptr(line))) = 0x00FFFFFF
-                } else {
-                    *(*uint32)(unsafe.Pointer(uintptr(BOOTBOOT_FB) + uintptr(line))) = 0
-                }
-                line = line + 4
-                mask >>= 1
-            }
-            *(*uint32)(unsafe.Pointer(uintptr(BOOTBOOT_FB) + uintptr(line))) = 0
-            offs = offs + (int)(*(*uint32)(unsafe.Pointer(uintptr(BOOTBOOT_INFO + 0x3c))))
-        }
-        kx = kx + 1
-    }
+	var i, x, y, kx, line, mask, offs int
+	kx = 0
+	for i = 0; i < len(s); i++ {
+		offs = kx * 9 * 4
+		for y = 0; y < 16; y++ {
+			line = offs
+			mask = 1 << 7
+			for x = 0; x < 8; x++ {
+				if (int(glyphs[int(s[i])*16+y]) & mask) == mask {
+					*(*uint32)(unsafe.Pointer(uintptr(BOOTBOOT_FB) + uintptr(line))) = 0x00FFFFFF
+				} else {
+					*(*uint32)(unsafe.Pointer(uintptr(BOOTBOOT_FB) + uintptr(line))) = 0
+				}
+				line = line + 4
+				mask >>= 1
+			}
+			*(*uint32)(unsafe.Pointer(uintptr(BOOTBOOT_FB) + uintptr(line))) = 0
+			offs = offs + (int)(*(*uint32)(unsafe.Pointer(uintptr(BOOTBOOT_INFO + 0x3c))))
+		}
+		kx = kx + 1
+	}
 }
+
+// All go programs expect there to be a main function evne though this is never called
+func main() {}
