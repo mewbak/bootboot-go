@@ -59,6 +59,17 @@ const glyphs = "\x00\x00\xda\x02\x80\x82\x02\x80\x82\x02\x80\xb6\x00\x00\x00\x00
 /******************************************
  * Entry point, called by BOOTBOOT Loader *
  ******************************************/
+// Here is why each pragma below is needed:
+//
+// cgo_export_static - Exports the symbol for the external linker to see
+//
+// linkname - Go symbols are a combination of their package and func name.
+// So this func is actually main._start This creates a link to this function
+// just as _start so that the exported C name knows which functions to call.
+//
+// nosplit - Go has growable stacks. Since we haven't told the runtime how
+// big the limine provided stack is disable the stack growth check.
+//
 //go:cgo_export_static _start _start
 //go:linkname _start _start
 //go:nosplit
@@ -131,5 +142,5 @@ func puts(s string) {
 	}
 }
 
-// All go programs expect there to be a main function evne though this is never called
+// All go programs expect there to be a main function even though this is never called
 func main() {}
